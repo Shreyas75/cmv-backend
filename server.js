@@ -40,9 +40,30 @@ const featuredEventSchema = new mongoose.Schema({
   image: String,
 });
 
+const userSchema = new mongoose.Schema({
+  firstName: String,
+  lastName: String,
+  email: String,
+  phoneNo: Number,
+  dob: Date,
+  additionalComments: String
+})
+
 const CarouselItem = mongoose.model('CarouselItem', carouselItemSchema);
 const UpcomingEvent = mongoose.model('UpcomingEvent', upcomingEventSchema);
 const FeaturedEvent = mongoose.model('FeaturedEvent', featuredEventSchema);
+const User = mongoose.model('User', userSchema);
+
+
+app.post('/api/volunteer', async (req, res) => {
+  try {
+    const newUser = new User(req.body);
+    await newUser.save();
+    res.status(201).json(newUser);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
 
 // Define API routes
 app.get('/api/carousel-items', async (req, res) => {
