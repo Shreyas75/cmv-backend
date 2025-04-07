@@ -1,4 +1,4 @@
-// filepath: /path/to/cmv-backend/server.js
+const axios = require('axios')
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -6,11 +6,13 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
+
+
 const app = express();
 const port = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({limit:'10mb'}));
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
@@ -207,6 +209,32 @@ app.post('/api/featured-events', async (req, res) => {
 app.delete('/api/featured-events/:id', async (req, res) => {
   await FeaturedEvent.findByIdAndDelete(req.params.id);
   res.json({ message: 'Event deleted' });
+});
+
+
+// cloudinary upload endpoint
+
+app.post('/api/upload-image', async (req, res) => {
+  try {
+    const { imageBase64 } = req.body;
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'Image data is required' });
+    }
+
+    const uploadResponse = await axios.post(
+      `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload`,
+      {
+        file: imageBase64,
+        upload_preset: 'ml_default',
+      }
+    );
+
+    res.json({ imageUrl: uploadResponse.data.secure_url });
+  } catch (err) {
+    console.error('Error uploading image to Cloudinary:', err.message);
+    res.status(500).json({ error: 'Image upload failed' });
+  }
 });
 
 app.listen(port, () => {
