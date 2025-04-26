@@ -38,7 +38,7 @@ cron.schedule('47 0 25 * *', async () => {
 
   try {
     // Fetch all users from the database
-    const users = await User.find({}, 'firstName lastName email phoneNo dob additionalComments');
+    const users = await User.find({}, 'firstName lastName email phoneNo dob additionalComments createdAt');
     if (users.length === 0) {
       console.log('No users found in the database.');
       return;

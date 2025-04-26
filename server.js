@@ -12,7 +12,7 @@ require('dotenv').config();
 
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5001;
 
 app.use(cors());
 app.use(express.json({limit:'10mb'}));
@@ -268,7 +268,7 @@ app.get("/api/export-user-data", async (req, res) => {
     // }
 
     // Fetch all users from the database
-    const users = await User.find({}, 'firstName lastName email phoneNo dob additionalComments');
+    const users = await User.find({}, 'firstName lastName email phoneNo dob additionalComments createdAt');
     
     if (users.length === 0) {
       // Since frontend expects a blob, we should avoid returning JSON for errors
