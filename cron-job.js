@@ -32,8 +32,8 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Cron job scheduled for the 1st of every month at 9:00 AM
-cron.schedule('0 9 1 * *', async () => {
+
+cron.schedule('47 0 25 * *', async () => {
   console.log('Cron job started: Fetching user data and sending email');
 
   try {
@@ -45,7 +45,7 @@ cron.schedule('0 9 1 * *', async () => {
     }
 
     // Convert user data to CSV
-    const fields = ['firstName', 'lastName', 'email', 'phoneNo', 'dob', 'additionalComments'];
+    const fields = ['firstName', 'lastName', 'email', 'phoneNo', 'dob', 'additionalComments', 'createdAt'];
     const json2csvParser = new Parser({ fields });
     const csv = json2csvParser.parse(users);
 
@@ -64,7 +64,7 @@ cron.schedule('0 9 1 * *', async () => {
     // Send email with the CSV file as an attachment
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: 'recipient@example.com', // Replace with the recipient's email
+      to: 'arjunchessid@gmail.com', // Replace with the recipient's email
       subject: 'Monthly User Data Export',
       text: 'Please find attached the monthly user data export.',
       attachments: [

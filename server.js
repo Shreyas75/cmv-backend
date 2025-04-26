@@ -4,6 +4,9 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
+const { Parser } = require('json2csv');
 require('dotenv').config();
 
 
@@ -62,8 +65,12 @@ const userSchema = new mongoose.Schema({
   email: String,
   phoneNo: Number,
   dob: Date,
-  additionalComments: String
-})
+  additionalComments: String,
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
 
 const CarouselItem = mongoose.model('CarouselItem', carouselItemSchema);
 const UpcomingEvent = mongoose.model('UpcomingEvent', upcomingEventSchema);
@@ -250,6 +257,49 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
+
+
+// Change the route to match your frontend call
+app.get("/api/export-user-data", async (req, res) => {
+  try {
+    // Authenticate the request (optional - consider adding authentication)
+    // if (!req.headers.authorization) {
+    //   return res.status(401).json({ error: 'Authentication required' });
+    // }
+
+    // Fetch all users from the database
+    const users = await User.find({}, 'firstName lastName email phoneNo dob additionalComments');
+    
+    if (users.length === 0) {
+      // Since frontend expects a blob, we should avoid returning JSON for errors
+      // Instead, create a CSV with a message
+      const emptyCSV = "No users found in the database.";
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=volunteer-data-empty.csv');
+      return res.send(emptyCSV);
+    }
+
+    // Convert user data to CSV
+    const fields = ['firstName', 'lastName', 'email', 'phoneNo', 'dob', 'additionalComments', 'createdAt'];
+    const json2csvParser = new Parser({ fields });
+    const csv = json2csvParser.parse(users);
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=volunteer-data.csv');
+    
+    // Send the CSV directly without saving to disk
+    res.send(csv);
+
+  } catch (error) {
+    console.error('Error exporting user data:', error.message);
+    // Send a CSV with error information instead of JSON
+    const errorCSV = "Error exporting data. Please try again later.";
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=export-error.csv');
+    res.status(500).send(errorCSV);
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
