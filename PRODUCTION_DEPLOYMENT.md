@@ -63,7 +63,7 @@ sudo nano .env
 **Production .env content:**
 ```bash
 # Database
-MONGODB_URI=mongodb+srv://arjunnair101105:arjunnn10@cluster0.sjcyi.mongodb.net/CMV
+
 
 # Email Configuration
 EMAIL_USER="arjunchessid@gmail.com"
