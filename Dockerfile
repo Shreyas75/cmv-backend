@@ -16,6 +16,9 @@ WORKDIR /app
 # Create non-root user
 RUN addgroup app && adduser -S -G app app
 
+# Create logs directory
+RUN mkdir -p logs && chown -R app:app logs
+
 # Copy dependencies & code from builder
 COPY --from=builder /app ./
 
@@ -32,7 +35,7 @@ RUN npm install -g pm2
 USER app
 
 # Expose backend port
-EXPOSE 5000
+EXPOSE 5001
 
 # Default command: use pm2 to run both scripts
 CMD ["pm2-runtime", "ecosystem.config.js"]
