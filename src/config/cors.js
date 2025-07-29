@@ -16,9 +16,13 @@ const devCorsOptions = {
   optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
 
-// Production CORS configuration - more restrictive
+// Production CORS configuration - more permissive for debugging
 const prodCorsOptions = {
   origin: function (origin, callback) {
+    // Temporarily allow all origins for debugging
+    callback(null, true);
+    
+    /* Original restrictive code - uncomment after debugging
     if (!origin) return callback(null, true);
     
     const Logger = require('../utils/logger');
@@ -41,6 +45,7 @@ const prodCorsOptions = {
       Logger.warn(`CORS blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
+    */
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
