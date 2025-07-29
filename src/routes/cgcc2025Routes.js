@@ -7,7 +7,7 @@ const logger = require('../utils/logger');
 // Rate limiting for registration endpoint
 const registrationRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 3, // Limit each IP to 3 registration attempts per windowMs
+  max: 10, // Limit each IP to 10 registration attempts per windowMs (increased from 3)
   message: {
     success: false,
     message: 'Too many registration attempts. Please try again after 15 minutes.',
@@ -18,8 +18,8 @@ const registrationRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
-    // Skip rate limiting for local development
-    return process.env.NODE_ENV === 'development' && req.ip === '::1';
+    // Skip rate limiting for local development and testing
+    return process.env.NODE_ENV === 'development' || req.ip === '::1' || req.ip === '127.0.0.1';
   }
 });
 
