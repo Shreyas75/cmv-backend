@@ -22,22 +22,11 @@ const upcomingEventSchema = new mongoose.Schema({
   },
   image: {
     type: String,
-    required: function() {
-      // Only required if images array is empty (backward compatibility)
-      return !this.images || this.images.length === 0;
-    }
+    required: true,
   },
   images: [{
     type: String,
-    validate: {
-      validator: function(url) {
-        // Basic URL validation for image URLs
-        return /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)$/i.test(url);
-      },
-      message: 'Please provide a valid image URL'
-    }
   }],
-  // Virtual field to get all images (single + array)
 }, {
   timestamps: true,
 });
