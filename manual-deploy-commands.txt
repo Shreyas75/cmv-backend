@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# Manual EC2 Deployment Commands
+# Run these commands one by one on your EC2 server
+
+echo "🔗 Connect to EC2 server:"
+echo "ssh -i your-key.pem ubuntu@your-ec2-ip"
+echo ""
+
+echo "📂 Navigate to project directory:"
+echo "cd /path/to/your/cmv-backend"
+echo ""
+
+echo "📥 Pull latest changes from GitHub:"
+echo "git pull origin master"
+echo ""
+
+echo "📦 Install/update dependencies:"
+echo "npm install --production"
+echo ""
+
+echo "🛑 Stop current application:"
+echo "pm2 delete all"
+echo ""
+
+echo "🚀 Start application in production mode:"
+echo "pm2 start ecosystem.config.js --env production"
+echo ""
+
+echo "💾 Save PM2 configuration:"
+echo "pm2 save"
+echo ""
+
+echo "📊 Check application status:"
+echo "pm2 status"
+echo "pm2 logs"
+echo ""
+
+echo "🔍 Verify new endpoints:"
+echo "curl http://your-domain/api/cgcc2025/stats"
+echo "curl http://your-domain/health"
+echo ""
+
+echo "✅ Deployment complete!"
