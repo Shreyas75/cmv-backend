@@ -37,7 +37,7 @@ cron.schedule('47 0 25 * *', async () => {
 
     // Send email with the CSV file as an attachment
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: `"Chinmaya Mission Vasai" <${process.env.EMAIL_USER}>`,
       to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER, // Use admin email or fallback to sender
       subject: 'Monthly User Data Export',
       text: 'Please find attached the monthly user data export.',

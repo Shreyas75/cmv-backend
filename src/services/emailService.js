@@ -5,7 +5,7 @@ const transporter = createTransporter();
 
 async function sendDonationEmail({ to, subject, text, html }) {
   const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    from: `"Chinmaya Mission Vasai" <${process.env.EMAIL_USER}>`,
     to,
     subject,
     text,
