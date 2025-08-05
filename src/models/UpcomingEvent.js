@@ -39,6 +39,26 @@ upcomingEventSchema.virtual('allImages').get(function() {
   return images;
 });
 
+// Virtual field for sharing metadata
+upcomingEventSchema.virtual('shareUrl').get(function() {
+  const baseUrl = process.env.FRONTEND_URL || 'https://chinmayamissionvasai.com';
+  return `${baseUrl}/upcoming-events/${this._id}`;
+});
+
+upcomingEventSchema.virtual('metaTitle').get(function() {
+  return `${this.eventName} - Chinmaya Mission Vasai`;
+});
+
+upcomingEventSchema.virtual('metaDescription').get(function() {
+  return this.description.length > 160 ? 
+    this.description.substring(0, 157) + '...' : 
+    this.description;
+});
+
+upcomingEventSchema.virtual('ogImage').get(function() {
+  return this.image;
+});
+
 // Ensure virtual fields are included in JSON output
 upcomingEventSchema.set('toJSON', { virtuals: true });
 upcomingEventSchema.set('toObject', { virtuals: true });

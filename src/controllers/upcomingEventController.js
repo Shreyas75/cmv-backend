@@ -3,7 +3,43 @@ const UpcomingEvent = require('../models/UpcomingEvent');
 class UpcomingEventController {
   async getAllEvents(req, res) {
     try {
-      const events = await UpcomingEvent.find();
+      const { sortBy = 'date_desc', search } = req.query;
+      
+      // Build query filters
+      let query = {};
+      
+      // Search filtering
+      if (search) {
+        query.$or = [
+          { eventName: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+          { schedule: { $regex: search, $options: 'i' } },
+          { contact: { $regex: search, $options: 'i' } }
+        ];
+      }
+      
+      // Build sort options
+      let sortOptions = {};
+      switch (sortBy) {
+        case 'date_asc':
+          sortOptions = { createdAt: 1 };
+          break;
+        case 'date_desc':
+        default:
+          sortOptions = { createdAt: -1 };
+          break;
+        case 'title_asc':
+          sortOptions = { eventName: 1 };
+          break;
+        case 'title_desc':
+          sortOptions = { eventName: -1 };
+          break;
+      }
+      
+      const events = await UpcomingEvent.find(query).sort(sortOptions);
+      
+      // Add caching headers
+      res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
       res.json(events);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -98,6 +134,8 @@ class UpcomingEventController {
         return res.status(404).json({ error: 'Event not found' });
       }
       
+      // Add caching headers
+      res.set('Cache-Control', 'public, max-age=600'); // 10 minutes
       res.json(event);
     } catch (error) {
       res.status(500).json({ error: error.message });
