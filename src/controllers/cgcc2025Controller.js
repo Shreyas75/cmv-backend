@@ -241,8 +241,48 @@ class CGCC2025Controller {
     }
   }
 
+  // Get all CGCC registrations (admin only)
+  async getAllRegistrations(req, res) {
+    try {
+      const registrations = await CGCC2025Registration.find()
+        .sort({ registrationDate: -1 })
+        .select('-__v') // Exclude version field
+        .lean();
+
+      logger.info(`CGCC 2025 registrations retrieved (${registrations.length} records) from ${req.ip}`);
+
+      return res.status(200).json({
+        success: true,
+        registrations: registrations.map(reg => ({
+          _id: reg._id,
+          firstName: reg.firstName,
+          middleName: reg.middleName || '',
+          lastName: reg.lastName,
+          schoolName: reg.schoolName,
+          standard: reg.standard,
+          parentName: reg.parentName,
+          mobileNo: reg.mobileNo,
+          emailAddress: reg.emailAddress,
+          dateOfBirth: reg.dateOfBirth.toISOString().split('T')[0], // Format as YYYY-MM-DD
+          registrationVia: reg.registrationVia,
+          otherSpecify: reg.otherSpecify || '',
+          registrationId: reg.registrationId,
+          participantName: reg.participantName,
+          createdAt: reg.registrationDate.toISOString()
+        }))
+      });
+
+    } catch (error) {
+      logger.error('CGCC 2025 get registrations error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve registrations'
+      });
+    }
+  }
+
   // Export registrations as CSV (admin only)
-  async exportRegistrations(req, res) {
+  async exportRegistrationsCSV(req, res) {
     try {
       const registrations = await CGCC2025Registration.find()
         .sort({ registrationDate: -1 })

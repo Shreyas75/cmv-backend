@@ -34,6 +34,8 @@ router.post('/register', registrationRateLimit, cgcc2025Controller.register);
 
 // Admin endpoints (no authentication for consistency with existing admin routes)
 router.get('/stats', cgcc2025Controller.getStats);
-router.get('/export', cgcc2025Controller.exportRegistrations);
+router.get('/registrations', cgcc2025Controller.getAllRegistrations);
+router.get('/export-csv', cgcc2025Controller.exportRegistrationsCSV);
+router.get('/export', cgcc2025Controller.exportRegistrationsCSV); // Keep backward compatibility
 
 module.exports = router;
