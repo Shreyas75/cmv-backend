@@ -30,7 +30,7 @@ module.exports = {
     },
     {
       name: 'cmv-staging-cron',
-      script: 'cron-job.js',
+      script: 'src/jobs/emailExportJob.js',
       instances: 1,
       exec_mode: 'fork',
       env: {
