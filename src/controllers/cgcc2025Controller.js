@@ -47,8 +47,8 @@ class CGCC2025Controller {
 
       if (!standard) {
         errors.push({ field: 'standard', message: 'Standard is required' });
-      } else if (!['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'].includes(standard)) {
-        errors.push({ field: 'standard', message: 'Standard must be between 1st and 12th' });
+      } else if (!['Kindergarten', 'Jr. KG', 'Sr. KG', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'].includes(standard)) {
+        errors.push({ field: 'standard', message: 'Standard must be Kindergarten, Jr. KG, Sr. KG, or between 1st and 12th' });
       }
 
       if (!parentName || !parentName.trim()) {
