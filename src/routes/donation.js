@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const donationLimiter = require('../middleware/rateLimiter');
+const { paymentLimiter } = require('../middleware/rateLimiter');
 const validateDonation = require('../middleware/validateDonation');
 const { createDonation } = require('../controllers/donationController');
 const logger = require('../utils/logger');
