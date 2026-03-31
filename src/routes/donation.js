@@ -13,7 +13,7 @@ router.use((req, res, next) => {
 
 router.post(
   '/',
-  donationLimiter,
+  paymentLimiter,
   express.json(),
   validateDonation,
   createDonation
