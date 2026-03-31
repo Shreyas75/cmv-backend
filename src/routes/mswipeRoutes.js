@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const mswipeController = require('../controllers/mswipeController');
-const { paymentLimiter, generalLimiter } = require('../middleware/rateLimiter');
 
 /**
  * POST /api/mswipe/initiate
@@ -10,7 +9,7 @@ const { paymentLimiter, generalLimiter } = require('../middleware/rateLimiter');
  * Public endpoint - rate limited
  * Creates pending donation and returns Mswipe payment URL (smslink)
  */
-router.post('/initiate', paymentLimiter, mswipeController.initiatePayment);
+router.post('/initiate', mswipeController.initiatePayment);
 
 /**
  * POST /api/mswipe/callback
@@ -29,7 +28,7 @@ router.post('/callback', mswipeController.handleCallback);
  * Public endpoint - rate limited
  * Useful for frontend to check/poll status
  */
-router.get('/status/:donationRef', generalLimiter, mswipeController.getDonationStatus);
+router.get('/status/:donationRef', mswipeController.getDonationStatus);
 
 /**
  * POST /api/mswipe/verify/:donationRef
@@ -38,7 +37,7 @@ router.get('/status/:donationRef', generalLimiter, mswipeController.getDonationS
  * Public endpoint - rate limited
  * Use if callback is missed or for debugging
  */
-router.post('/verify/:donationRef', generalLimiter, mswipeController.verifyTransaction);
+router.post('/verify/:donationRef', mswipeController.verifyTransaction);
 
 /**
  * GET /api/mswipe/info

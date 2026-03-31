@@ -51,25 +51,8 @@ exports.initiatePayment = async (req, res) => {
       return res.status(400).json({ errors });
     }
 
-    // --- RATE LIMITING LOGIC ---
-    // Capture IP address early for rate limiting
+    // Capture request metadata
     const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-
-    // Check for any recent PENDING donation from the same IP in the last 30 seconds
-    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
-    const recentAttempt = await Donation.findOne({
-      ipAddress: ipAddress,
-      paymentStatus: 'PENDING',
-      createdAt: { $gte: thirtySecondsAgo }
-    });
-
-    if (recentAttempt) {
-      logger.warn(`Duplicate payment attempt detected from IP ${ipAddress}. Please wait before retrying.`);
-      return res.status(429).json({
-        error: 'A recent payment attempt is already in progress. Please wait 30 seconds and try again.'
-      });
-    }
-    // --- END RATE LIMITING LOGIC ---
 
     // Capture other metadata
     const userAgent = req.headers['user-agent'] || '';
@@ -178,7 +161,7 @@ exports.initiatePayment = async (req, res) => {
       const duplicateField = err.keyPattern ? Object.keys(err.keyPattern)[0] : 'unknown';
       logger.error(`Duplicate key error on field: ${duplicateField}`);
       return res.status(409).json({ 
-        error: 'A recent donation attempt was detected. Please wait 30 seconds and try again.',
+        error: 'A duplicate donation record was detected. Please retry the payment.',
         field: duplicateField
       });
     }
