@@ -1,9 +1,10 @@
+const { v4: uuidv4 } = require('uuid');
 const Donation = require('../models/Donation');
 const logger = require('../utils/logger');
 const crypto = require('crypto');
 
 function generateDonationRef() {
-  return 'CMV' + Date.now() + Math.floor(Math.random() * 10000);
+  return `CMV-${Date.now()}-${uuidv4()}`;
 }
 
 /**

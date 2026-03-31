@@ -19,12 +19,6 @@ const devCorsOptions = {
 // Production CORS configuration - more permissive for debugging
 const prodCorsOptions = {
   origin: function (origin, callback) {
-    // Temporarily allow all origins for debugging
-    callback(null, true);
-    
-    /* Original restrictive code - uncomment after debugging
-    if (!origin) return callback(null, true);
-    
     const Logger = require('../utils/logger');
     
     const allowedOrigins = [
@@ -33,19 +27,20 @@ const prodCorsOptions = {
       'http://localhost:5173',     // Vite development server
       'http://127.0.0.1:3000',     // Localhost alternative
       'http://127.0.0.1:3001',     // Localhost alternative
-      'http://localhost:5173/',     // Vite localhost alternative
+      'http://127.0.0.1:5173',     // Vite localhost alternative
       process.env.FRONTEND_URL,
       process.env.ADMIN_URL,
     ].filter(Boolean); // Remove undefined values
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       // Log blocked origins only in development
-      Logger.warn(`CORS blocked origin: ${origin}`);
+      if (process.env.NODE_ENV !== 'production') {
+        Logger.warn(`CORS blocked origin: ${origin}`);
+      }
       callback(new Error('Not allowed by CORS'));
     }
-    */
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],

@@ -1,38 +1,14 @@
+const { v4: uuidv4 } = require('uuid');
 const Donation = require('../models/Donation');
 const mswipeService = require('../services/mswipeService');
-const { sendDonationEmail } = require('../services/emailService');
-const logger = require('../utils/logger');
-const validator = require('validator');
-
-/**
- * Generate unique donation reference
- * Format: CMV{timestamp}{random}
- */
+// ... existing code
 function generateDonationRef() {
-  return 'CMV' + Date.now() + Math.floor(Math.random() * 10000);
+  return `CMV-${Date.now()}-${uuidv4()}`;
 }
 
 /**
  * Sanitize input string
- */
-function sanitizeInput(input) {
-  if (typeof input === 'string') {
-    return validator.escape(input.trim());
-  }
-  return input;
-}
-
-/**
- * Initiate Mswipe payment
- * Creates a pending donation and returns Mswipe payment URL
- * 
- * POST /api/mswipe/initiate
- * Body: { fullName, email, phoneNumber, amount, state, city, pinCode, address, seek80G, reasonForDonation, purpose }
- * 
- * SECURITY: 
- * - Never trust frontend payment status
- * - Payment confirmation occurs ONLY in callback
- * - This endpoint creates PENDING donations only
+// ... existing code
  */
 exports.initiatePayment = async (req, res) => {
   try {
@@ -75,37 +51,55 @@ exports.initiatePayment = async (req, res) => {
     const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     const userAgent = req.headers['user-agent'] || '';
 
-    // Generate unique identifiers
-    const donationRef = generateDonationRef();
-    const mswipeOrderId = mswipeService.generateOrderId();
-
-    // Create pending donation record
-    const donationData = {
-      fullName: sanitizeInput(fullName),
+    // --- MODIFIED LOGIC: Check for recent pending/failed donations ---
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    let donation = await Donation.findOne({
       email: sanitizeInput(email),
-      phoneNumber: sanitizeInput(phoneNumber),
-      state: sanitizeInput(state),
-      city: sanitizeInput(city),
-      pinCode: sanitizeInput(pinCode),
-      address: sanitizeInput(address),
-      seek80G: seek80G,
       amount: Number(amount),
-      reasonForDonation: reasonForDonation,
-      purpose: sanitizeInput(purpose),
-      panCardNumber: panCardNumber, // Will be hashed by model
-      donationRef,
-      paymentGateway: 'mswipe',
-      paymentStatus: 'PENDING',
-      status: 'pending', // Legacy field
-      mswipeOrderId,
-      ipAddress,
-      userAgent
-    };
+      paymentStatus: { $in: ['PENDING', 'FAILED'] },
+      createdAt: { $gte: fiveMinutesAgo }
+    }).sort({ createdAt: -1 });
 
-    const donation = new Donation(donationData);
+    if (donation) {
+      // If a recent donation is found, reuse it
+      logger.info(`Reusing existing donation record: ${donation.donationRef} for email ${email}`);
+      donation.mswipeOrderId = mswipeService.generateOrderId(); // Generate a new order ID for this attempt
+      donation.paymentStatus = 'PENDING';
+      donation.status = 'pending';
+      donation.updatedAt = new Date();
+    } else {
+      // No recent donation found, create a new one
+      const donationRef = generateDonationRef();
+      const mswipeOrderId = mswipeService.generateOrderId();
+
+      const donationData = {
+        fullName: sanitizeInput(fullName),
+        email: sanitizeInput(email),
+        phoneNumber: sanitizeInput(phoneNumber),
+        state: sanitizeInput(state),
+        city: sanitizeInput(city),
+        pinCode: sanitizeInput(pinCode),
+        address: sanitizeInput(address),
+        seek80G: seek80G,
+        amount: Number(amount),
+        reasonForDonation: reasonForDonation,
+        purpose: sanitizeInput(purpose),
+        panCardNumber: panCardNumber,
+        donationRef,
+        paymentGateway: 'mswipe',
+        paymentStatus: 'PENDING',
+        status: 'pending',
+        mswipeOrderId,
+        ipAddress,
+        userAgent
+      };
+      donation = new Donation(donationData);
+    }
+    
     await donation.save();
+    // --- END MODIFIED LOGIC ---
 
-    logger.info(`Mswipe donation initiated: ${donationRef} (Order: ${mswipeOrderId}) by ${email}`);
+    logger.info(`Mswipe donation initiated: ${donation.donationRef} (Order: ${donation.mswipeOrderId}) by ${email}`);
 
     // Call Mswipe API to create payment link
     const mswipeResult = await mswipeService.createOrder({
@@ -113,8 +107,8 @@ exports.initiatePayment = async (req, res) => {
       email: email,
       mobile: phoneNumber,
       amount: Number(amount),
-      orderId: mswipeOrderId,
-      donationRef: donationRef,
+      orderId: donation.mswipeOrderId,
+      donationRef: donation.donationRef,
       purpose: purpose || reasonForDonation
     });
 
@@ -125,11 +119,11 @@ exports.initiatePayment = async (req, res) => {
       donation.mswipePaymentResponse = { error: mswipeResult.error };
       await donation.save();
 
-      logger.error(`Mswipe order creation failed for ${donationRef}: ${mswipeResult.error}`);
+      logger.error(`Mswipe order creation failed for ${donation.donationRef}: ${mswipeResult.error}`);
       return res.status(500).json({ 
         error: 'Failed to initiate payment',
         details: process.env.NODE_ENV !== 'production' ? mswipeResult.error : undefined,
-        donationRef // Return reference for support queries
+        donationRef: donation.donationRef // Return reference for support queries
       });
     }
 
@@ -143,8 +137,8 @@ exports.initiatePayment = async (req, res) => {
     return res.status(200).json({
       success: true,
       paymentUrl: mswipeResult.data.paymentUrl,
-      donationRef,
-      orderId: mswipeOrderId
+      donationRef: donation.donationRef,
+      orderId: donation.mswipeOrderId
     });
 
   } catch (err) {
