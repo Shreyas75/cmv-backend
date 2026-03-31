@@ -21,24 +21,34 @@ const prodCorsOptions = {
   origin: function (origin, callback) {
     const Logger = require('../utils/logger');
     
+    // Normalize environment variables by removing any trailing slashes
+    const frontendUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : null;
+    const adminUrl = process.env.ADMIN_URL ? process.env.ADMIN_URL.replace(/\/$/, '') : null;
+
     const allowedOrigins = [
-      'http://localhost:3000',     // React development server
-      'http://localhost:3001',     // Alternative React port
-      'http://localhost:5173',     // Vite development server
-      'http://127.0.0.1:3000',     // Localhost alternative
-      'http://127.0.0.1:3001',     // Localhost alternative
-      'http://127.0.0.1:5173',     // Vite localhost alternative
-      process.env.FRONTEND_URL,
-      process.env.ADMIN_URL,
-    ].filter(Boolean); // Remove undefined values
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:5173',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+      'http://127.0.0.1:5173',
+      frontendUrl,
+      adminUrl,
+    ].filter(Boolean); // Remove null/undefined values
+
+    // Log the allowed origins for debugging, but only once at startup
+    if (process.env.NODE_ENV === 'production' && !global.corsLogged) {
+      Logger.info(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
+      global.corsLogged = true; // Prevent re-logging
+    }
     
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    // Normalize the incoming origin by removing any trailing slash
+    const normalizedOrigin = origin ? origin.replace(/\/$/, '') : origin;
+
+    if (!origin || allowedOrigins.indexOf(normalizedOrigin) !== -1) {
       callback(null, true);
     } else {
-      // Log blocked origins only in development
-      if (process.env.NODE_ENV !== 'production') {
-        Logger.warn(`CORS blocked origin: ${origin}`);
-      }
+      Logger.warn(`CORS blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
