@@ -9,6 +9,11 @@ const Logger = require('./utils/logger');
 require('dotenv').config();
 
 const app = express();
+
+// Trust the first proxy
+// This is required for express-rate-limit to work correctly behind a reverse proxy like Nginx
+app.set('trust proxy', 1);
+
 const port = process.env.PORT || 5001;
 
 // Connect to MongoDB
