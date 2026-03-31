@@ -58,28 +58,4 @@ router.get('/info', mswipeController.getServiceInfo);
 // TODO: Add admin authentication middleware
 router.get('/debug/token', mswipeController.debugTestToken);
 
-module.exports = router; 
- * Response:
- * {
- *   environment: 'uat' | 'production',
- *   baseUrl: string,
- *   configured: boolean,
- *   hasValidToken: boolean
- * }
- */
-router.get('/info', mswipeController.getServiceInfo);
-
-/**
- * GET /api/mswipe/debug/token
- * Debug endpoint to test Mswipe token generation
- * 
- * Helps verify if credentials are configured correctly
- * and if we can connect to Mswipe API
- * 
- * SECURITY: Only available in non-production environments
- */
-if (process.env.NODE_ENV !== 'production') {
-  router.get('/debug/token', mswipeController.debugTestToken);
-}
-
 module.exports = router;

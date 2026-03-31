@@ -1,5 +1,4 @@
 const rateLimit = require('express-rate-limit');
-const logger = require('../utils/logger');
 
 /**
  * Creates a rate limiter with custom options.

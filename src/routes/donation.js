@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { paymentLimiter } = require('../middleware/rateLimiter');
 const validateDonation = require('../middleware/validateDonation');
 const { createDonation } = require('../controllers/donationController');
 const logger = require('../utils/logger');
@@ -13,7 +12,6 @@ router.use((req, res, next) => {
 
 router.post(
   '/',
-  paymentLimiter,
   express.json(),
   validateDonation,
   createDonation
