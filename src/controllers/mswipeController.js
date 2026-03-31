@@ -51,6 +51,23 @@ exports.initiatePayment = async (req, res) => {
       return res.status(400).json({ errors });
     }
 
+    // --- RATE LIMITING LOGIC ---
+    // Check for any recent PENDING donation from the same email in the last 30 seconds
+    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+    const recentAttempt = await Donation.findOne({
+      email: sanitizeInput(email),
+      paymentStatus: 'PENDING',
+      createdAt: { $gte: thirtySecondsAgo }
+    });
+
+    if (recentAttempt) {
+      logger.warn(`Duplicate payment attempt detected for ${email}. Please wait before retrying.`);
+      return res.status(429).json({
+        error: 'A recent payment attempt is already in progress. Please wait 30 seconds and try again.'
+      });
+    }
+    // --- END RATE LIMITING LOGIC ---
+
     // Capture metadata
     const ipAddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     const userAgent = req.headers['user-agent'] || '';
