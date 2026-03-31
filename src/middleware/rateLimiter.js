@@ -14,10 +14,7 @@ const createRateLimiter = ({ windowMs, max, message }) => {
     windowMs,
     max,
     message: { error: message },
-    handler: (req, res, next, options) => {
-      logger.warn(`Rate limit exceeded for ${req.ip}: ${options.message.error}`);
-      res.status(options.statusCode).send(options.message);
-    },
+    // The handler option is removed to prevent circular dependency with the logger
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   });
