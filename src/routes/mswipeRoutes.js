@@ -58,46 +58,7 @@ router.get('/info', mswipeController.getServiceInfo);
 // TODO: Add admin authentication middleware
 router.get('/debug/token', mswipeController.debugTestToken);
 
-module.exports = router;
- *   status: 'PENDING' | 'SUCCESS' | 'FAILED',
- *   amount: number,
- *   transactionRef: string,
- *   ipgId: string,
- *   createdAt: Date,
- *   updatedAt: Date
- * }
- */
-router.get('/status/:donationRef', statusLimiter, mswipeController.getDonationStatus);
-
-/**
- * POST /api/mswipe/verify/:donationRef
- * Verify transaction status with Mswipe API
- * 
- * Use this endpoint to manually verify payment status
- * if callback was missed or for reconciliation
- * 
- * Calls Mswipe getPBLTransactionDetails API
- * Updates donation status if changed from PENDING
- * 
- * Response:
- * {
- *   donationRef: string,
- *   status: 'PENDING' | 'SUCCESS' | 'FAILED',
- *   mswipeStatus: { ... Mswipe API response },
- *   amount: number,
- *   transactionRef: string,
- *   updatedAt: Date
- * }
- */
-router.post('/verify/:donationRef', statusLimiter, mswipeController.verifyTransaction);
-
-/**
- * GET /api/mswipe/info
- * Get Mswipe service environment info (for debugging)
- * 
- * Returns current environment (UAT/Production), 
- * configuration status, and token status
- * 
+module.exports = router; 
  * Response:
  * {
  *   environment: 'uat' | 'production',
