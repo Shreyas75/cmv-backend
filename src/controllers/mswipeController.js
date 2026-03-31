@@ -70,6 +70,10 @@ exports.initiatePayment = async (req, res) => {
       // If a recent donation is found, reuse it
       logger.info(`Reusing existing donation record: ${donation.donationRef} for email ${email}`);
       donation.mswipeOrderId = mswipeService.generateOrderId(); // Generate a new order ID for this attempt
+      // Keep legacy unique field populated to avoid duplicate-key issues on older indexes.
+      if (!donation.transactionId) {
+        donation.transactionId = `MSW-${donation.donationRef}`;
+      }
       donation.paymentStatus = 'PENDING';
       donation.status = 'pending';
       donation.updatedAt = new Date();
@@ -92,6 +96,8 @@ exports.initiatePayment = async (req, res) => {
         purpose: sanitizeInput(purpose),
         panCardNumber: panCardNumber,
         donationRef,
+        // Populate legacy unique field with a deterministic unique value.
+        transactionId: `MSW-${donationRef}`,
         paymentGateway: 'mswipe',
         paymentStatus: 'PENDING',
         status: 'pending',
