@@ -1,3 +1,4 @@
+const { sanitizeInput } = require('../utils/helpers');
 const validator = require('validator');
 const Donation = require('../models/Donation');
 
@@ -13,13 +14,6 @@ const allowedStates = [
   'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Jammu and Kashmir',
   'Ladakh', 'Lakshadweep', 'Puducherry'
 ];
-
-function sanitizeInput(input) {
-  if (typeof input === 'string') {
-    return validator.escape(input.trim());
-  }
-  return input;
-}
 
 module.exports = async function validateDonation(req, res, next) {
   try {
