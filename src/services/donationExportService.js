@@ -1,6 +1,7 @@
 const Donation = require('../models/Donation');
 const { Parser } = require('json2csv');
 const logger = require('../utils/logger');
+const encryptionService = require('./encryptionService');
 
 class DonationExportService {
   async exportDonationsToCSV(filters = {}) {
@@ -53,8 +54,9 @@ class DonationExportService {
       }
       
       // Fetch donations from database
+      // NOTE: Now includes panCardNumber for decryption (it's encrypted in DB, not sensitive in export)
       const donations = await Donation.find(query)
-        .select('-__v -panCardNumber') // Exclude sensitive data and version key
+        .select('-__v') // Only exclude version key, keep panCardNumber for decryption
         .sort({ createdAt: -1 })
         .lean();
       
@@ -63,44 +65,57 @@ class DonationExportService {
       }
       
       // Transform data for CSV export
-      const transformedData = donations.map(donation => ({
-        'Donation Reference': donation.donationRef,
-        'Full Name': donation.fullName,
-        'Email': donation.email,
-        'Phone Number': donation.phoneNumber,
-        'State': donation.state,
-        'City': donation.city,
-        'Pin Code': donation.pinCode,
-        'Address': donation.address,
-        'Seek 80G Certificate': donation.seek80G,
-        'Amount (Rs.)': donation.amount,
-        'Payment Gateway': donation.paymentGateway || 'manual',
-        'Payment Status': donation.paymentStatus || 'SUCCESS',
-        'Transaction ID': donation.transactionId || donation.mswipeTransactionRef || '',
-        'Mswipe Order ID': donation.mswipeOrderId || '',
-        'Reason for Donation': donation.reasonForDonation,
-        'Purpose': donation.purpose || '',
-        'Status': donation.status,
-        'IP Address': donation.ipAddress || '',
-        'Created Date': new Date(donation.createdAt).toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        }),
-        'Updated Date': new Date(donation.updatedAt).toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata',
-          year: 'numeric',
-          month: '2-digit',
+      const transformedData = donations.map(donation => {
+        // Decrypt PAN if present
+        let panCard = '';
+        if (donation.panCardNumber) {
+          const decryptedPAN = encryptionService.decryptPAN(donation.panCardNumber);
+          panCard = decryptedPAN || ''; // Empty if decryption fails (old hashed records)
+        }
+
+        return {
+          'Donation Reference': donation.donationRef,
+          'Full Name': donation.fullName,
+          'Email': donation.email,
+          'Phone Number': donation.phoneNumber,
+          'House Number': donation.houseNumber || '',
+          'Area': donation.area || '',
+          'Address': donation.address,
+          'City': donation.city,
+          'State': donation.state,
+          'Pin Code': donation.pinCode,
+          'Country': donation.country || 'India',
+          'PAN Card Number': panCard, // Decrypted PAN for admin
+          'Seek 80G Certificate': donation.seek80G,
+          'Amount (Rs.)': donation.amount,
+          'Payment Gateway': donation.paymentGateway || 'manual',
+          'Payment Status': donation.paymentStatus || 'SUCCESS',
+          'Transaction ID': donation.transactionId || donation.mswipeTransactionRef || '',
+          'Mswipe Order ID': donation.mswipeOrderId || '',
+          'Reason for Donation': donation.reasonForDonation,
+          'Purpose': donation.purpose || '',
+          'Status': donation.status,
+          'IP Address': donation.ipAddress || '',
+          'Created Date': new Date(donation.createdAt).toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          }),
+          'Updated Date': new Date(donation.updatedAt).toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
           day: '2-digit',
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit'
         })
-      }));
+      };
+      });
       
       // Define CSV fields
       const fields = [
@@ -108,10 +123,14 @@ class DonationExportService {
         'Full Name',
         'Email',
         'Phone Number',
-        'State',
-        'City',
-        'Pin Code',
+        'House Number',
+        'Area',
         'Address',
+        'City',
+        'State',
+        'Pin Code',
+        'Country',
+        'PAN Card Number',
         'Seek 80G Certificate',
         'Amount (Rs.)',
         'Payment Gateway',

@@ -31,6 +31,13 @@ router.post('/callback', mswipeController.handleCallback);
 router.get('/status/:donationRef', mswipeController.getDonationStatus);
 
 /**
+ * GET /api/mswipe/status-sync/:donationRef
+ * Get donation status with one-step auto-sync for pending records.
+ * Useful for frontend auto-refresh polling.
+ */
+router.get('/status-sync/:donationRef', mswipeController.getDonationStatusSync);
+
+/**
  * POST /api/mswipe/verify/:donationRef
  * Manually verify transaction status with Mswipe
  *
@@ -38,6 +45,12 @@ router.get('/status/:donationRef', mswipeController.getDonationStatus);
  * Use if callback is missed or for debugging
  */
 router.post('/verify/:donationRef', mswipeController.verifyTransaction);
+
+/**
+ * GET /api/mswipe/receipt/:donationRef
+ * Download receipt PDF for successful donations.
+ */
+router.get('/receipt/:donationRef', mswipeController.downloadReceipt);
 
 /**
  * GET /api/mswipe/info

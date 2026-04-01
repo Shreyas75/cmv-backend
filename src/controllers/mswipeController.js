@@ -1,6 +1,8 @@
 const { v4: uuidv4 } = require('uuid');
 const Donation = require('../models/Donation');
 const mswipeService = require('../services/mswipeService');
+const { sendDonationEmail } = require('../services/emailService');
+const { generateDonationReceiptPdf } = require('../services/receiptService');
 const logger = require('../utils/logger');
 const validator = require('validator');
 const { sanitizeInput } = require('../utils/helpers');
@@ -8,6 +10,78 @@ const { sanitizeInput } = require('../utils/helpers');
 // ... existing code
 function generateDonationRef() {
   return `CMV-${Date.now()}-${uuidv4()}`;
+}
+
+function toDonationStatusResponse(donation, extra = {}) {
+  return {
+    donationRef: donation.donationRef,
+    status: donation.paymentStatus,
+    amount: donation.amount,
+    transactionRef: donation.mswipeTransactionRef,
+    ipgId: donation.mswipeIpgId,
+    createdAt: donation.createdAt,
+    updatedAt: donation.updatedAt,
+    ...extra,
+  };
+}
+
+async function sendSuccessEmail(donation, source = 'callback') {
+  try {
+    await sendDonationEmail({
+      to: donation.email,
+      subject: 'Thank you for your donation - Chinmaya Mission Vasai',
+      text: `Dear ${donation.fullName},\n\nThank you for your generous donation of Rs. ${donation.amount}.\n\nYour donation reference number is: ${donation.donationRef}\nTransaction ID: ${donation.mswipeTransactionRef}\n\nYour support helps us continue our mission.\n\nWith gratitude,\nChinmaya Mission Vasai`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #ff6600;">Thank You for Your Donation</h2>
+          <p>Dear <strong>${donation.fullName}</strong>,</p>
+          <p>Thank you for your generous donation of <strong>Rs. ${donation.amount}</strong>.</p>
+          <div style="background-color: #f5f5f5; padding: 15px; margin: 20px 0; border-left: 4px solid #ff6600;">
+            <p style="margin: 5px 0;"><strong>Donation Reference:</strong> ${donation.donationRef}</p>
+            <p style="margin: 5px 0;"><strong>Transaction ID:</strong> ${donation.mswipeTransactionRef}</p>
+            <p style="margin: 5px 0;"><strong>Amount:</strong> Rs. ${donation.amount}</p>
+            <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date(donation.updatedAt).toLocaleDateString('en-IN')}</p>
+          </div>
+          <p>Your support helps us continue our mission to spread knowledge and serve the community.</p>
+          <p style="margin-top: 30px;">With gratitude,<br><strong>Chinmaya Mission Vasai</strong></p>
+        </div>
+      `,
+    });
+    logger.info(`Success email sent to ${donation.email} (via ${source})`);
+  } catch (emailErr) {
+    logger.error('Failed to send donation success email', emailErr);
+  }
+}
+
+async function syncPendingDonationStatus(donation, requestMeta) {
+  if (!donation || donation.paymentStatus !== 'PENDING' || !donation.mswipeTransId) {
+    return { donation, statusResult: null };
+  }
+
+  const statusResult = await mswipeService.checkTransactionStatus(donation.mswipeTransId, requestMeta);
+  if (!statusResult.success) {
+    return { donation, statusResult };
+  }
+
+  const mswipeStatus = statusResult.data.status;
+  if (mswipeStatus !== 'PENDING') {
+    donation.paymentStatus = mswipeStatus;
+    donation.status = mswipeStatus === 'SUCCESS' ? 'completed' : 'failed';
+    donation.mswipeTransactionRef = statusResult.data.paymentId || statusResult.data.ipgId;
+    donation.mswipeIpgId = statusResult.data.ipgId;
+    donation.mswipePaymentResponse = {
+      ...donation.mswipePaymentResponse,
+      statusCheck: statusResult.data,
+    };
+    donation.updatedAt = new Date();
+    await donation.save();
+
+    if (mswipeStatus === 'SUCCESS') {
+      await sendSuccessEmail(donation, 'status-sync');
+    }
+  }
+
+  return { donation, statusResult };
 }
 
 /**
@@ -34,6 +108,9 @@ exports.initiatePayment = async (req, res) => {
       city,
       pinCode,
       address,
+      houseNumber,
+      area,
+      country,
       seek80G,
       reasonForDonation,
       purpose,
@@ -74,6 +151,16 @@ exports.initiatePayment = async (req, res) => {
       if (!donation.transactionId) {
         donation.transactionId = `MSW-${donation.donationRef}`;
       }
+      // Update address components if provided in new request
+      if (houseNumber) donation.houseNumber = sanitizeInput(houseNumber);
+      if (area) donation.area = sanitizeInput(area);
+      // Update other fields that might have changed
+      if (phoneNumber) donation.phoneNumber = sanitizeInput(phoneNumber);
+      if (state) donation.state = sanitizeInput(state);
+      if (city) donation.city = sanitizeInput(city);
+      if (pinCode) donation.pinCode = sanitizeInput(pinCode);
+      if (address) donation.address = sanitizeInput(address);
+      if (country) donation.country = country || 'India';
       donation.paymentStatus = 'PENDING';
       donation.status = 'pending';
       donation.updatedAt = new Date();
@@ -90,6 +177,7 @@ exports.initiatePayment = async (req, res) => {
         city: sanitizeInput(city),
         pinCode: sanitizeInput(pinCode),
         address: sanitizeInput(address),
+        country: country || 'India',
         seek80G: seek80G,
         amount: Number(amount),
         reasonForDonation: reasonForDonation,
@@ -105,6 +193,13 @@ exports.initiatePayment = async (req, res) => {
         ipAddress,
         userAgent
       };
+      // Only add address components if they have non-empty values
+      if (houseNumber && houseNumber.trim()) {
+        donationData.houseNumber = sanitizeInput(houseNumber);
+      }
+      if (area && area.trim()) {
+        donationData.area = sanitizeInput(area);
+      }
       donation = new Donation(donationData);
     }
     
@@ -274,32 +369,7 @@ exports.handleCallback = async (req, res) => {
 
     // Send success email ONLY for successful payments
     if (donation.paymentStatus === 'SUCCESS') {
-      try {
-        await sendDonationEmail({
-          to: donation.email,
-          subject: 'Thank you for your donation - Chinmaya Mission Vasai',
-          text: `Dear ${donation.fullName},\n\nThank you for your generous donation of Rs. ${donation.amount}.\n\nYour donation reference number is: ${donation.donationRef}\nTransaction ID: ${donation.mswipeTransactionRef}\n\nYour support helps us continue our mission.\n\nWith gratitude,\nChinmaya Mission Vasai`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #ff6600;">Thank You for Your Donation</h2>
-              <p>Dear <strong>${donation.fullName}</strong>,</p>
-              <p>Thank you for your generous donation of <strong>Rs. ${donation.amount}</strong>.</p>
-              <div style="background-color: #f5f5f5; padding: 15px; margin: 20px 0; border-left: 4px solid #ff6600;">
-                <p style="margin: 5px 0;"><strong>Donation Reference:</strong> ${donation.donationRef}</p>
-                <p style="margin: 5px 0;"><strong>Transaction ID:</strong> ${donation.mswipeTransactionRef}</p>
-                <p style="margin: 5px 0;"><strong>Amount:</strong> Rs. ${donation.amount}</p>
-                <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date(donation.updatedAt).toLocaleDateString('en-IN')}</p>
-              </div>
-              <p>Your support helps us continue our mission to spread knowledge and serve the community.</p>
-              <p style="margin-top: 30px;">With gratitude,<br><strong>Chinmaya Mission Vasai</strong></p>
-            </div>
-          `
-        });
-        logger.info(`Success email sent to ${donation.email}`);
-      } catch (emailErr) {
-        logger.error('Failed to send donation success email', emailErr);
-        // Don't fail the callback if email fails
-      }
+      await sendSuccessEmail(donation, 'callback');
     }
 
     // Redirect to frontend payment result page
@@ -348,15 +418,7 @@ exports.getDonationStatus = async (req, res) => {
       return res.status(404).json({ error: 'Donation not found' });
     }
 
-    return res.status(200).json({
-      donationRef: donation.donationRef,
-      status: donation.paymentStatus,
-      amount: donation.amount,
-      transactionRef: donation.mswipeTransactionRef,
-      ipgId: donation.mswipeIpgId,
-      createdAt: donation.createdAt,
-      updatedAt: donation.updatedAt
-    });
+    return res.status(200).json(toDonationStatusResponse(donation));
 
   } catch (err) {
     logger.error('Get donation status error', err);
@@ -409,8 +471,6 @@ exports.verifyTransaction = async (req, res) => {
     }
 
     const mswipeStatus = statusResult.data.status;
-
-    // If status changed from PENDING, update the donation
     if (donation.paymentStatus === 'PENDING' && mswipeStatus !== 'PENDING') {
       donation.paymentStatus = mswipeStatus;
       donation.status = mswipeStatus === 'SUCCESS' ? 'completed' : 'failed';
@@ -418,51 +478,22 @@ exports.verifyTransaction = async (req, res) => {
       donation.mswipeIpgId = statusResult.data.ipgId;
       donation.mswipePaymentResponse = {
         ...donation.mswipePaymentResponse,
-        statusCheck: statusResult.data
+        statusCheck: statusResult.data,
       };
       donation.updatedAt = new Date();
       await donation.save();
 
-      logger.info(`Donation ${donationRef} updated via status check to ${mswipeStatus}`);
-
-      // Send email for successful payments
+      logger.info(`Donation ${donationRef} updated via verify endpoint to ${mswipeStatus}`);
       if (mswipeStatus === 'SUCCESS') {
-        try {
-          await sendDonationEmail({
-            to: donation.email,
-            subject: 'Thank you for your donation - Chinmaya Mission Vasai',
-            text: `Dear ${donation.fullName},\n\nThank you for your generous donation of Rs. ${donation.amount}.\n\nYour donation reference number is: ${donation.donationRef}\nTransaction ID: ${donation.mswipeTransactionRef}\n\nYour support helps us continue our mission.\n\nWith gratitude,\nChinmaya Mission Vasai`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #ff6600;">Thank You for Your Donation</h2>
-                <p>Dear <strong>${donation.fullName}</strong>,</p>
-                <p>Thank you for your generous donation of <strong>Rs. ${donation.amount}</strong>.</p>
-                <div style="background-color: #f5f5f5; padding: 15px; margin: 20px 0; border-left: 4px solid #ff6600;">
-                  <p style="margin: 5px 0;"><strong>Donation Reference:</strong> ${donation.donationRef}</p>
-                  <p style="margin: 5px 0;"><strong>Transaction ID:</strong> ${donation.mswipeTransactionRef}</p>
-                  <p style="margin: 5px 0;"><strong>Amount:</strong> Rs. ${donation.amount}</p>
-                  <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date(donation.updatedAt).toLocaleDateString('en-IN')}</p>
-                </div>
-                <p>Your support helps us continue our mission to spread knowledge and serve the community.</p>
-                <p style="margin-top: 30px;">With gratitude,<br><strong>Chinmaya Mission Vasai</strong></p>
-              </div>
-            `
-          });
-          logger.info(`Success email sent to ${donation.email} (via status check)`);
-        } catch (emailErr) {
-          logger.error('Failed to send donation success email', emailErr);
-        }
+        await sendSuccessEmail(donation, 'verify');
       }
     }
 
-    return res.status(200).json({
-      donationRef: donation.donationRef,
-      status: donation.paymentStatus,
-      mswipeStatus: statusResult.data,
-      amount: donation.amount,
-      transactionRef: donation.mswipeTransactionRef,
-      updatedAt: donation.updatedAt
-    });
+    return res.status(200).json(
+      toDonationStatusResponse(donation, {
+        mswipeStatus: statusResult.data,
+      })
+    );
 
   } catch (err) {
     logger.error('Verify transaction error', err);
@@ -482,6 +513,96 @@ exports.getServiceInfo = async (req, res) => {
   } catch (err) {
     logger.error('Get service info error', err);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Get donation status and auto-sync once with Mswipe when still pending.
+ * Intended for frontend auto-refresh polling.
+ *
+ * GET /api/mswipe/status-sync/:donationRef
+ */
+exports.getDonationStatusSync = async (req, res) => {
+  try {
+    const { donationRef } = req.params;
+    if (!donationRef) {
+      return res.status(400).json({ error: 'Donation reference is required' });
+    }
+
+    const donation = await Donation.findOne({ donationRef });
+    if (!donation) {
+      return res.status(404).json({ error: 'Donation not found' });
+    }
+
+    const requestMeta = {
+      ipAddress: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    };
+
+    const syncAttempted = donation.paymentStatus === 'PENDING' && !!donation.mswipeTransId;
+
+    const { donation: syncedDonation, statusResult } = await syncPendingDonationStatus(
+      donation,
+      requestMeta
+    );
+
+    const response = toDonationStatusResponse(syncedDonation, {
+      syncAttempted,
+    });
+
+    if (statusResult && statusResult.success) {
+      response.mswipeStatus = statusResult.data;
+    }
+
+    if (statusResult && !statusResult.success) {
+      response.syncError = statusResult.error;
+    }
+
+    return res.status(200).json(response);
+  } catch (err) {
+    logger.error('Status sync error', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Download donation receipt (PDF) for successful payments.
+ *
+ * GET /api/mswipe/receipt/:donationRef
+ */
+exports.downloadReceipt = async (req, res) => {
+  try {
+    const { donationRef } = req.params;
+    if (!donationRef) {
+      return res.status(400).json({ error: 'Donation reference is required' });
+    }
+
+    const donation = await Donation.findOne({ donationRef })
+      .select(
+        'donationRef fullName email phoneNumber address houseNumber area city state pinCode country panCardNumber amount purpose reasonForDonation paymentStatus mswipeTransactionRef mswipeIpgId mswipeOrderId transactionId createdAt updatedAt'
+      );
+
+    if (!donation) {
+      return res.status(404).json({ error: 'Donation not found' });
+    }
+
+    if (donation.paymentStatus !== 'SUCCESS') {
+      return res.status(409).json({
+        error: 'Receipt is only available for successful payments',
+        status: donation.paymentStatus,
+      });
+    }
+
+    const pdfBuffer = await generateDonationReceiptPdf(donation);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="donation-receipt-${donation.donationRef}.pdf"`
+    );
+    return res.status(200).send(pdfBuffer);
+  } catch (err) {
+    logger.error('Download receipt error', err);
+    return res.status(500).json({ error: 'Failed to generate receipt' });
   }
 };
 

@@ -59,7 +59,9 @@ This document explains the backend architecture for Mswipe payment integration s
 | `POST` | `/api/mswipe/initiate` | Create donation & get payment URL |
 | `POST` | `/api/mswipe/callback` | Webhook (Mswipe → Backend, not for frontend) |
 | `GET` | `/api/mswipe/status/:donationRef` | Check donation payment status |
+| `GET` | `/api/mswipe/status-sync/:donationRef` | Check status and auto-sync once if still pending |
 | `POST` | `/api/mswipe/verify/:donationRef` | Force status check with Mswipe API |
+| `GET` | `/api/mswipe/receipt/:donationRef` | Download PDF receipt (SUCCESS only) |
 | `GET` | `/api/mswipe/info` | Debug: Check service configuration |
 
 ---
@@ -204,6 +206,28 @@ const PaymentResult = () => {
 
   // Success state
   if (verifiedStatus === 'SUCCESS') {
+    const downloadReceipt = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/mswipe/receipt/${donationDetails?.donationRef}`
+        );
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `Donation_Receipt_CMV_${donationDetails?.donationRef}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        }
+      } catch (error) {
+        console.error('Receipt download failed:', error);
+        alert('Failed to download receipt. Please try again.');
+      }
+    };
+
     return (
       <div className="payment-result success">
         <div className="icon">✅</div>
@@ -227,6 +251,34 @@ const PaymentResult = () => {
             <span>Date:</span>
             <strong>{new Date(donationDetails?.updatedAt).toLocaleDateString('en-IN')}</strong>
           </div>
+        </div>
+
+        {/* Download Receipt Button - NEW */}
+        <button onClick={downloadReceipt} className="download-receipt-btn" style={{
+          backgroundColor: '#E8531A',
+          color: 'white',
+          padding: '10px 20px',
+          borderRadius: '5px',
+          border: 'none',
+          cursor: 'pointer',
+          marginTop: '15px',
+          fontSize: '16px',
+          fontWeight: 'bold'
+        }}>
+          📥 Download Acknowledgment Slip
+        </button>
+
+        {/* 80G Notice - NEW */}
+        <div className="notice" style={{
+          backgroundColor: '#F5F5F5',
+          border: '1px solid #E8531A',
+          padding: '10px',
+          borderRadius: '5px',
+          marginTop: '15px',
+          fontSize: '14px',
+          textAlign: 'center'
+        }}>
+          📄 80G Donation receipt will be mailed separately to your registered address
         </div>
         
         <p className="email-note">
@@ -320,6 +372,7 @@ interface DonationRequest {
   city: string;               // Required
   pinCode: string;            // Required, exactly 6 digits
   address: string;            // Required
+  country?: string;           // Optional, defaults to 'India'
   seek80G: 'yes' | 'no';      // Required
   reasonForDonation:          // Required, one of:
     | 'Gurudakshina'
@@ -386,7 +439,37 @@ interface DonationRequest {
 
 ---
 
-### 3. POST /api/mswipe/verify/:donationRef
+### 3. GET /api/mswipe/status-sync/:donationRef
+
+Use this endpoint for result-page auto refresh. It returns current status and performs a one-step backend sync with Mswipe when the record is still `PENDING`.
+
+**Success Response (200):**
+```typescript
+{
+  donationRef: "CMV17688247321751938",
+  status: "SUCCESS" | "PENDING" | "FAILED",
+  amount: 100,
+  transactionRef: "000007963164",
+  ipgId: "IPG000000031322",
+  createdAt: "2026-01-19T12:12:12.179Z",
+  updatedAt: "2026-01-19T12:15:30.862Z",
+  syncAttempted: true,
+  mswipeStatus?: { ... },
+  syncError?: string
+}
+```
+
+**Recommended Result Page Behavior:**
+1. Wait 1 second after page load.
+2. Call `GET /api/mswipe/status-sync/:donationRef`.
+3. If status is `PENDING`, auto-poll this same endpoint every 2 seconds for up to 60 seconds.
+4. If still `PENDING` after 60 seconds, show exactly one manual action button: `Refresh Payment Status`.
+
+This avoids the two-button confusion and removes dependency on manual refresh for most successful payments.
+
+---
+
+### 4. POST /api/mswipe/verify/:donationRef
 
 Use this to force a status check with Mswipe API (if callback was missed):
 
@@ -405,6 +488,24 @@ Use this to force a status check with Mswipe API (if callback was missed):
   amount: 100,
   transactionRef: "000007963164",
   updatedAt: "2026-01-19T12:15:30.862Z"
+}
+```
+
+---
+
+### 5. GET /api/mswipe/receipt/:donationRef
+
+Download donation receipt as PDF. Show this button only when status is `SUCCESS`.
+
+**Success Response (200):**
+- Content-Type: `application/pdf`
+- Content-Disposition: `attachment; filename="donation-receipt-{donationRef}.pdf"`
+
+**Error Response (409):**
+```json
+{
+  "error": "Receipt is only available for successful payments",
+  "status": "PENDING"
 }
 ```
 
@@ -798,7 +899,213 @@ const testDonation = {
 
 ---
 
-## 🔧 Environment Configuration
+## � Receipt Download & Acknowledgment
+
+After a successful payment, donors receive a professionally branded **Donation Acknowledgment Slip** as a PDF receipt. This slip contains all essential donation details and is designed with Chinmaya Mission branding.
+
+### Download Receipt Endpoint
+
+**GET** `/api/mswipe/receipt/:donationRef`
+
+- **When Available:** Only after successful payment (status = `SUCCESS`)
+- **Response:** PDF file with Chinmaya branding
+- **Download Name:** `Donation_Receipt_CMV_{donationRef}.pdf`
+- **Rate Limit:** 10 requests per 15 minutes per IP (to prevent abuse)
+
+### PDF Receipt Contents
+
+The generated PDF includes:
+
+**Header Section:**
+- Chinmaya Mission Vasai Organization details (name, address, email)
+- Saffron-colored header with organization logo area
+
+**Title:**
+- "DONATION ACKNOWLEDGMENT SLIP" (centered, bold, saffron-colored)
+
+**Donor Details:**
+- Donor Full Name
+- Mobile Number (formatted as +91 XXXXX XXXXX)
+- Email Address
+- PAN Card Number (if provided, for 80G eligibility)
+
+**Address Section:**
+- Full Address
+- City, State, Pincode, Country
+
+**Payment Details:**
+- Donation Date & Time (IST timezone)
+- Payment Gateway (Mswipe)
+- Transaction ID (from bank)
+- Order ID (Mswipe reference)
+- Donation Amount (₹)
+- Purpose of Donation
+
+**80G Notice:**
+- Prominent box stating: "80G Donation receipt will be sent from our Vasai office"
+- This informs donors about the offline 80G certificate process
+
+**Footer:**
+- Thank you message
+- OM (ॐ) symbol
+- Organization website
+- Watermarked background (faded ॐ symbol for authenticity)
+
+### Backend Implementation
+
+The receipt generation is handled by `/src/services/receiptService.js` with the following features:
+
+- **Chinmaya Branding:** Saffron (#E8531A) as primary color throughout
+- **Professional Layout:** Section dividers, proper spacing, readable fonts
+- **Mobile Formatting:** Phone numbers automatically formatted to Indian locale (+91 format)
+- **Watermark:** Subtle ॐ background (8% opacity) for authenticity without obstructing text
+- **Error Handling:** Graceful handling of missing fields with fallback values
+
+### Frontend Implementation
+
+#### 1. Add Download Button (Success Page)
+
+In your payment result success component, add a download button:
+
+```jsx
+const downloadReceipt = async () => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/mswipe/receipt/${donationDetails?.donationRef}`
+    );
+    
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Donation_Receipt_CMV_${donationDetails?.donationRef}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } else {
+      alert('Failed to download receipt. Please try again.');
+    }
+  } catch (error) {
+    console.error('Receipt download failed:', error);
+    alert('Network error. Please check your connection.');
+  }
+};
+
+// Success page JSX with button
+return (
+  <div className="payment-result success">
+    {/* ... existing content ... */}
+    
+    {/* Download Receipt Button - NEW */}
+    <button 
+      onClick={downloadReceipt} 
+      className="download-receipt-btn"
+      style={{
+        backgroundColor: '#E8531A',    // Saffron
+        color: 'white',
+        padding: '12px 24px',
+        borderRadius: '6px',
+        border: 'none',
+        cursor: 'pointer',
+        marginTop: '20px',
+        fontSize: '16px',
+        fontWeight: 'bold',
+        transition: 'background-color 0.3s ease'
+      }}
+      onMouseEnter={(e) => e.target.style.backgroundColor = '#D64512'}
+      onMouseLeave={(e) => e.target.style.backgroundColor = '#E8531A'}
+    >
+      📥 Download Acknowledgment Slip
+    </button>
+
+    {/* 80G Notice - NEW */}
+    <div 
+      className="eighty-g-notice"
+      style={{
+        backgroundColor: '#F5F5F5',
+        border: '2px solid #E8531A',
+        padding: '15px',
+        borderRadius: '6px',
+        marginTop: '20px',
+        fontSize: '14px',
+        textAlign: 'center',
+        color: '#2C2C2C'
+      }}
+    >
+      <strong>📄 80G Donation Receipt</strong>
+      <p>Your official 80G donation receipt will be mailed separately to your registered address within 7-10 business days.</p>
+    </div>
+  </div>
+);
+```
+
+#### 2. Error Handling
+
+The download function includes built-in error handling:
+
+- **409 Conflict:** Payment not yet successful → Show: "Receipt is only available for successful payments"
+- **404 Not Found:** Donation record missing → Show: "Receipt not found. Please contact support"
+- **Network Error:** Connection issue → Show: "Network error. Please check your connection"
+
+#### 3. User Experience Flow
+
+```
+Donation Form
+    ↓
+Submit → Get paymentUrl + donationRef
+    ↓
+Redirect to Mswipe Payment Gateway
+    ↓
+User Completes Payment
+    ↓
+Mswipe Redirects to Result Page
+    ↓
+Backend Verifies Status (SUCCESS/FAILED/PENDING)
+    ↓
+If SUCCESS → Show:
+   ✅ Payment Successful Message
+   💳 Donation Details (Amount, Date, Reference)
+   📥 Download Receipt Button ← NEW
+   📄 80G Notice Box ← NEW
+   📧 Email Confirmation Message
+```
+
+### Email Integration
+
+After payment success, the backend automatically:
+1. Generates the PDF receipt
+2. Sends receipt as attachment via email (if configured)
+3. Triggers `receiptSentEmail` event for logging
+
+Recipients receive:
+- Email from: noreply@chinmayamissionvasai.com
+- Subject: "Donation Acknowledgment Receipt - Chinmaya Mission Vasai"
+- Attachment: PDF receipt with their donation reference
+- Body: Thank you message + donation details
+
+### Testing Receipt Download
+
+```javascript
+// Test in payment result page
+// 1. Make a successful test donation
+// 2. Get redirected to result page
+// 3. Click "Download Acknowledgment Slip" button
+// 4. Verify PDF opens/downloads with correct filename:
+//    Format: Donation_Receipt_CMV_CMVxxxxxxxxxxxxxxxx.pdf
+```
+
+### Security Considerations
+
+- **Access Control:** Only donors or admins can download their receipt
+- **HTTPS Only:** All receipt downloads use HTTPS in production
+- **Rate Limiting:** 10 requests per 15 minutes prevent abuse
+- **No PAN Exposure:** PAN is masked except in the actual receipt PDF (shown only to donor)
+
+---
+
+## �🔧 Environment Configuration
 
 ### Frontend Environment Variables
 

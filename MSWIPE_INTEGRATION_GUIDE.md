@@ -54,6 +54,7 @@ This backend now supports **Mswipe IPG (Payment Gateway)** for processing donati
   "city": "Mumbai",
   "pinCode": "400001",
   "address": "123 Main Street",
+  "country": "India",
   "seek80G": "yes",
   "reasonForDonation": "General Donation",
   "purpose": "Support education programs",
@@ -70,6 +71,24 @@ This backend now supports **Mswipe IPG (Payment Gateway)** for processing donati
   "orderId": "MSWP1705420800001"
 }
 ```
+
+**Request Body Fields:**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `fullName` | String | ✅ Yes | Donor's full name, min 2 characters |
+| `email` | String | ✅ Yes | Valid email address for confirmation |
+| `phoneNumber` | String | ✅ Yes | Exactly 10 digits (mobile number) |
+| `amount` | Number | ✅ Yes | Donation amount in Rupees (positive integer) |
+| `state` | String | ✅ Yes | Indian state name (see [State List](#state-list)) |
+| `city` | String | ✅ Yes | City/Town name |
+| `pinCode` | String | ✅ Yes | Postal code, exactly 6 digits |
+| `address` | String | ✅ Yes | Full street/house address |
+| `country` | String | ❌ Optional | Donor's country. Defaults to `'India'` if not provided |
+| `seek80G` | String | ✅ Yes | Either `'yes'` or `'no'`. If `'yes'`, `panCardNumber` is required |
+| `reasonForDonation` | String | ✅ Yes | One of: `'General Donation'`, `'Gurudakshina'`, `'Event Sponsorship'`, `'Building Fund'`, `'Educational Support'`, `'Community Service'`, `'Special Occasion'`, `'Other'` |
+| `purpose` | String | ❌ Optional | Free-text description of donation purpose (max 500 chars) |
+| `panCardNumber` | String | ⚠️ Conditional | Required if `seek80G === 'yes'`. Format: 10 uppercase alphanumeric (e.g., `ABCDE1234F`) |
 
 **Flow:**
 1. Backend validates input
@@ -132,7 +151,57 @@ This backend now supports **Mswipe IPG (Payment Gateway)** for processing donati
 
 ---
 
-### 4. Legacy Manual Donation (DEPRECATED)
+### 4. Get Donation Status (Auto Sync)
+
+**Endpoint:** `GET /api/mswipe/status-sync/:donationRef`  
+**Authentication:** None (Public)
+
+**Purpose:**
+- Returns current donation status.
+- If the donation is still `PENDING`, backend performs one immediate Mswipe status sync before responding.
+- Intended for frontend auto-polling on payment result page.
+
+**Response:**
+```json
+{
+  "donationRef": "CMV1705420800001",
+  "status": "SUCCESS",
+  "amount": 1000,
+  "transactionRef": "TXN123456789",
+  "ipgId": "IPG000000031322",
+  "createdAt": "2026-01-16T10:00:00.000Z",
+  "updatedAt": "2026-01-16T10:05:23.000Z",
+  "syncAttempted": true
+}
+```
+
+---
+
+### 5. Download Donation Receipt (PDF)
+
+**Endpoint:** `GET /api/mswipe/receipt/:donationRef`  
+**Authentication:** None (Public)
+
+**Purpose:**
+- Returns downloadable PDF receipt for successful donations.
+- Should be used by frontend only after status is `SUCCESS`.
+
+**Success Response:**
+- `200 OK`
+- `Content-Type: application/pdf`
+- `Content-Disposition: attachment; filename="donation-receipt-{donationRef}.pdf"`
+
+**Pending/Failed Response (409):**
+```json
+{
+  "error": "Receipt is only available for successful payments",
+  "status": "PENDING"
+}
+```
+
+---
+
+### 6. Legacy Manual Donation (DEPRECATED)
 
 **Endpoint:** `POST /api/donations`  
 **Status:** Kept for backward compatibility only

@@ -1,15 +1,18 @@
 const mongoose = require('mongoose');
-const crypto = require('crypto');
+const encryptionService = require('../services/encryptionService');
 
 const donationSchema = new mongoose.Schema({
   fullName: { type: String, required: true, trim: true },
   email: { type: String, required: true, trim: true, lowercase: true, index: true },
   phoneNumber: { type: String, required: true, trim: true },
-  panCardNumber: { type: String, set: v => v ? crypto.createHash('sha256').update(v).digest('hex') : undefined },
+  panCardNumber: { type: String, set: v => v ? encryptionService.encryptPAN(v) : undefined },
   state: { type: String, required: true, trim: true },
   city: { type: String, required: true, trim: true },
   pinCode: { type: String, required: true, trim: true },
   address: { type: String, required: true, trim: true },
+  houseNumber: { type: String, trim: true },      // NEW: Address component [optional]
+  area: { type: String, trim: true },             // NEW: Address component [optional]
+  country: { type: String, default: 'India', trim: true },
   seek80G: { type: String, required: true, enum: ['yes', 'no'] },
   amount: { type: Number, required: true, min: 1 },
   // LEGACY: transactionId is now optional - only used for old manual donations

@@ -57,6 +57,29 @@ module.exports = async function validateDonation(req, res, next) {
     if (body.seek80G && !['yes', 'no'].includes(body.seek80G)) {
       errors.push('seek80G must be "yes" or "no"');
     }
+    // PAN Card Number - validation
+    // Required if seek80G === 'yes', optional otherwise
+    if (body.seek80G === 'yes' && (!body.panCardNumber || !body.panCardNumber.trim())) {
+      errors.push('PAN card number is required when seeking 80G certificate');
+    }
+    // PAN format validation - must be 10 chars: ABCDE1234F pattern
+    if (body.panCardNumber && body.panCardNumber.trim()) {
+      const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+      if (!panRegex.test(body.panCardNumber.toUpperCase())) {
+        errors.push('PAN card number must be in format: ABCDE1234F (5 letters, 4 digits, 1 letter)');
+      }
+    }
+    // Address components (optional) - for enhanced detail capture
+    if (body.houseNumber && typeof body.houseNumber !== 'string') {
+      errors.push('House number must be a string');
+    }
+    if (body.area && typeof body.area !== 'string') {
+      errors.push('Area must be a string');
+    }
+    // Country (optional, defaults to India)
+    if (body.country && typeof body.country !== 'string') {
+      errors.push('Country must be a string');
+    }
     if (errors.length > 0) {
       return res.status(400).json({ errors });
     }

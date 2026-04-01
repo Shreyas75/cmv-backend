@@ -28,6 +28,7 @@
     "mongoose": "^8.13.2",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.10.0",
+    "pdfkit": "^0.18.0",
     "pm2": "^6.0.5",
     "uuid": "^8.3.2",
     "validator": "^13.15.15"
