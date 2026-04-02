@@ -39,17 +39,19 @@ function formatMobileNumber(phone) {
   return phone;
 }
 
-function addDetailRow(doc, label, value, startX = 50, labelWidth = 130, valueStartX = 160) {
+function addDetailRow(doc, label, value) {
   const currentY = doc.y;
   const pageWidth = doc.page.width;
-  const rightMargin = 40;
+  const rightMargin = 20;
+  const labelWidth = 130;
+  const valueStartX = 20 + labelWidth;
   const availableWidth = pageWidth - rightMargin - valueStartX;
 
   // Write label
   doc.fontSize(10)
     .font('Helvetica-Bold')
     .fillColor(COLORS.darkGray)
-    .text(label, startX, currentY, { width: labelWidth, continued: false });
+    .text(label, 20, currentY, { width: labelWidth, continued: false });
 
   // Write value on same line
   doc.fontSize(10)
@@ -57,7 +59,7 @@ function addDetailRow(doc, label, value, startX = 50, labelWidth = 130, valueSta
     .fillColor(COLORS.darkGray)
     .text(value, valueStartX, currentY, { width: availableWidth, align: 'left' });
 
-  doc.moveDown(0.4);
+  doc.moveDown(0.6);
 }
 
 function getReceiptData(donation) {
@@ -113,7 +115,7 @@ function generateDonationReceiptPdf(donation) {
     try {
       const doc = new PDFDocument({ 
         size: 'A4', 
-        margin: 40,
+        margin: 20,
         bufferPages: true 
       });
 
@@ -126,84 +128,90 @@ function generateDonationReceiptPdf(donation) {
       const pageWidth = doc.page.width;
       const pageHeight = doc.page.height;
 
-      // ==== WATERMARK (Faded background text) ====
-      doc.opacity(0.08);
-      doc.fontSize(80)
-        .font('Helvetica-Bold')
-        .text('ॐ', pageWidth / 2 - 50, pageHeight / 2 - 80, {
-          width: 100,
-          align: 'center'
-        });
-      doc.opacity(1); // Reset opacity
+      // Define paths for assets
+      const logoPath = path.join(__dirname, '..', '..', 'assets', 'images', 'logo-2.png');
+      const contentWidth = pageWidth - 80; // 40 margin on each side
 
-      // ==== HEADER: Logo and Organization Details ====
-      const headerY = 40;
-      const logoWidth = 60;
-      const logoHeight = 60;
+      // ==== WATERMARK (Faded background logo) ====
+      if (fs.existsSync(logoPath)) {
+        const watermarkSize = 300;
+        doc.opacity(0.08)
+           .image(logoPath, (pageWidth - watermarkSize) / 2, (pageHeight - watermarkSize) / 2, {
+             width: watermarkSize,
+             height: watermarkSize,
+           });
+        doc.opacity(1); // Reset opacity
+      }
 
-      // Try to embed logo
-      const logoPath = path.join(__dirname, '../../..', 'CMV-Website-Staging/public/logo-2.png');
+      // ==== HEADER: Logo and Organization Details (Inline) ====
+      const headerY = 20;
+      const logoWidth = 50;
+      const logoHeight = 50;
+
+      // Try to embed logo on the left
       try {
         if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 50, headerY, { width: logoWidth, height: logoHeight });
+          doc.image(logoPath, 20, headerY, { width: logoWidth, height: logoHeight });
         }
       } catch (logoErr) {
         console.warn('Logo not found at path:', logoPath, 'Error:', logoErr.message);
       }
 
-      // Organization text (positioned to the right of logo)
-      const textStartX = 120;
-      doc.fontSize(18)
+      // Organization text to the right of logo
+      const textStartX = 75;
+      const textWidth = pageWidth - textStartX - 20;
+
+      doc.fontSize(16)
         .font('Helvetica-Bold')
         .fillColor(COLORS.saffron)
-        .text(data.organizationName, textStartX, headerY + 5, { width: pageWidth - textStartX - 40 });
-
-      doc.fontSize(9)
-        .font('Helvetica')
-        .fillColor(COLORS.darkGray)
-        .text(data.organizationAddress, textStartX, headerY + 35, { width: pageWidth - textStartX - 40 });
+        .text(data.organizationName, textStartX, headerY + 5, { width: textWidth, align: 'left' });
 
       doc.fontSize(8)
+        .font('Helvetica')
         .fillColor(COLORS.darkGray)
-        .text(`Email: ${data.organizationEmail}`, textStartX, headerY + 50, { width: pageWidth - textStartX - 40 });
+        .text(data.organizationAddress, textStartX, doc.y, { width: textWidth, align: 'left' });
 
-      // Move down after logo area
-      doc.y = Math.max(doc.y, headerY + logoHeight + 20);
-      doc.moveDown(0.3);
+      doc.fontSize(7)
+        .fillColor(COLORS.darkGray)
+        .text(`Email: ${data.organizationEmail}`, textStartX, doc.y, { width: textWidth, align: 'left' });
+
+      // Move down after header
+      doc.y = Math.max(doc.y, headerY + logoHeight + 10);
+      doc.moveDown(0.2);
 
       // ==== DIVIDER LINE ====
       doc.strokeColor(COLORS.saffron)
         .lineWidth(2)
-        .moveTo(40, doc.y)
-        .lineTo(pageWidth - 40, doc.y)
+        .moveTo(20, doc.y)
+        .lineTo(pageWidth - 20, doc.y)
         .stroke();
 
-      doc.moveDown(0.8);
+      doc.moveDown(0.6);
 
       // ==== TITLE ====
-      doc.fontSize(18)
+      doc.fontSize(16)
         .font('Helvetica-Bold')
         .fillColor(COLORS.saffron)
-        .text('DONATION ACKNOWLEDGMENT SLIP', { align: 'center' });
+        .text('DONATION ACKNOWLEDGMENT SLIP', 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
-      doc.moveDown(0.8);
+      doc.moveDown(0.6);
 
       // ==== DIVIDER LINE ====
       doc.strokeColor(COLORS.divider)
         .lineWidth(1)
-        .moveTo(40, doc.y)
-        .lineTo(pageWidth - 40, doc.y)
+        .moveTo(20, doc.y)
+        .lineTo(pageWidth - 20, doc.y)
         .stroke();
 
-      doc.moveDown(0.8);
+      doc.moveDown(1.5);
 
-      // ==== DONOR DETAILS SECTION ====
+      // ==== DONOR DETAILS SECTION (Left-aligned) ====
       doc.fontSize(11)
         .font('Helvetica-Bold')
         .fillColor(COLORS.saffron)
-        .text('DONOR DETAILS');
+        .text('DONOR DETAILS', 20, doc.y);
 
-      doc.moveDown(0.3);
+      doc.moveDown(0.2);
       addDetailRow(doc, 'Name:', data.donorName);
       addDetailRow(doc, 'Mobile:', data.donorMobile);
       addDetailRow(doc, 'Email:', data.donorEmail);
@@ -211,22 +219,24 @@ function generateDonationReceiptPdf(donation) {
 
       doc.moveDown(0.8);
 
-      // ==== ADDRESS SECTION ====
+      // ==== LIGHT DIVIDER LINE ====
+      doc.strokeColor(COLORS.divider)
+        .lineWidth(1)
+        .moveTo(20, doc.y)
+        .lineTo(pageWidth - 20, doc.y)
+        .stroke();
+
+      doc.moveDown(1);
+
+      // ==== ADDRESS SECTION (Left-aligned) ====
       doc.fontSize(11)
         .font('Helvetica-Bold')
         .fillColor(COLORS.saffron)
-        .text('ADDRESS');
+        .text('ADDRESS', 20, doc.y);
 
-      doc.moveDown(0.3);
-      
-      // Display address components if available
-      if (data.houseNumber !== 'N/A') {
-        addDetailRow(doc, 'House No:', data.houseNumber);
-      }
-      if (data.area !== 'N/A') {
-        addDetailRow(doc, 'Area:', data.area);
-      }
-      
+      doc.moveDown(0.2);
+      addDetailRow(doc, 'House No:', data.houseNumber);
+      addDetailRow(doc, 'Area:', data.area);
       addDetailRow(doc, 'Address:', data.address);
       addDetailRow(doc, 'City:', data.city);
       addDetailRow(doc, 'State:', data.state);
@@ -235,94 +245,98 @@ function generateDonationReceiptPdf(donation) {
 
       doc.moveDown(0.8);
 
-      // ==== PAYMENT DETAILS SECTION ====
+      // ==== LIGHT DIVIDER LINE ====
+      doc.strokeColor(COLORS.divider)
+        .lineWidth(1)
+        .moveTo(20, doc.y)
+        .lineTo(pageWidth - 20, doc.y)
+        .stroke();
+
+      doc.moveDown(1);
+
+      // ==== PAYMENT DETAILS SECTION (Left-aligned) ====
       doc.fontSize(11)
         .font('Helvetica-Bold')
         .fillColor(COLORS.saffron)
-        .text('PAYMENT DETAILS');
+        .text('PAYMENT DETAILS', 20, doc.y);
 
-      doc.moveDown(0.3);
+      doc.moveDown(0.2);
       addDetailRow(doc, 'Date & Time (IST):', data.paymentDateTime);
       addDetailRow(doc, 'Payment Gateway:', data.paymentGateway);
       addDetailRow(doc, 'Transaction ID:', data.transactionId);
       addDetailRow(doc, 'Order ID:', data.orderId);
-
-      doc.moveDown(0.3);
-      doc.fontSize(10)
-        .font('Helvetica-Bold')
-        .fillColor(COLORS.darkGray);
       addDetailRow(doc, 'Amount Received:', data.amount);
-      
-      doc.fontSize(10)
-        .font('Helvetica')
-        .fillColor(COLORS.darkGray);
       addDetailRow(doc, 'Purpose:', data.purpose);
 
-      doc.moveDown(0.8);
+      // Position footer near the bottom of the page
+      const footerStartY = pageHeight - 125; // Leave room for footer content
+      if (doc.y < footerStartY) {
+        doc.y = footerStartY;
+      }
 
-      // ==== DIVIDER: BOLD ====
+      doc.moveDown(0.2);
+
+      // ==== DARK DIVIDER LINE ====
       doc.strokeColor(COLORS.saffron)
         .lineWidth(2)
-        .moveTo(40, doc.y)
-        .lineTo(pageWidth - 40, doc.y)
+        .moveTo(20, doc.y)
+        .lineTo(pageWidth - 20, doc.y)
         .stroke();
 
-      doc.moveDown(0.8);
+      doc.moveDown(0.3);
 
-      // ==== 80G NOTICE ====
-      const centerX = 40;
-      const centerWidth = pageWidth - 80;
-      
+      // ==== 80G NOTICE SECTION ====
       doc.fontSize(9)
         .font('Helvetica-Bold')
         .fillColor(COLORS.saffron)
-        .text('⚠️  80G DONATION RECEIPT', centerX, doc.y, {
-          width: centerWidth,
+        .text('80G DONATION RECEIPT', 20, doc.y, {
+          width: pageWidth - 40,
           align: 'center'
         });
 
-      doc.fontSize(8)
-        .font('Helvetica')
+      doc.font('Helvetica')
+        .fontSize(8)
         .fillColor(COLORS.darkGray)
-        .text('80G Donation receipt will be sent from our Vasai office', centerX, doc.y, {
-          width: centerWidth,
+        .text('80G Donation receipt will be sent from our Vasai office', 20, doc.y, {
+          width: pageWidth - 40,
           align: 'center'
         });
 
-      doc.moveDown(1);
+      doc.moveDown(0.3);
 
-      // ==== FOOTER MESSAGE ====
+      // ==== THANK YOU SECTION ====
       doc.fontSize(10)
         .font('Helvetica-Bold')
         .fillColor(COLORS.darkGray)
-        .text('Thank you for your generous donation!', { align: 'center' });
+        .text('Thank you for your generous donation!', 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
+      doc.moveDown(0.2);
+
+      // ==== MISSION MOTTO SECTION ====
       doc.fontSize(9)
         .font('Helvetica')
         .fillColor(COLORS.darkGray)
-        .text('Your contribution supports our mission of', { align: 'center' });
+        .text('Your contribution Supports our mission of', 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
-      doc.text('"Maximum Happiness for Maximum People"', { align: 'center' });
+      doc.text('"Maximum Happiness To Maximum People', 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
-      doc.moveDown(0.5);
+      doc.text('For Maximum Time"', 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
-      // ==== OM SYMBOL ====
-      doc.fontSize(24)
-        .fillColor(COLORS.saffron)
-        .text('ॐ', { align: 'center' });
+      doc.moveDown(0.3);
 
-      doc.moveDown(0.5);
-
-      // ==== FOOTER: Organization Details ====
+      // ==== ORGANIZATION NAME ====
       doc.fontSize(10)
         .font('Helvetica-Bold')
         .fillColor(COLORS.darkGray)
-        .text(data.organizationName, { align: 'center' });
+        .text(data.organizationName, 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
+      doc.moveDown(0.1);
+
+      // ==== ORGANIZATION WEBSITE ====
       doc.fontSize(9)
         .font('Helvetica')
         .fillColor(COLORS.darkGray)
-        .text(data.organizationWebsite, { align: 'center' });
+        .text(data.organizationWebsite, 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
       doc.end();
     } catch (error) {
