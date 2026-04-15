@@ -13,7 +13,55 @@ const COLORS = {
 };
 
 function formatCurrency(amount) {
-  return `Rs. ${Number(amount || 0).toLocaleString('en-IN')}`;
+  return `INR ${Number(amount || 0).toLocaleString('en-IN')}`;
+}
+
+function convertNumberToWords(num) {
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const scales = ['', 'Thousand', 'Lakh', 'Crore'];
+
+  if (num === 0) return 'Zero';
+
+  const convertBelow1000 = (n) => {
+    let result = '';
+    const hundreds = Math.floor(n / 100);
+    const remainder = n % 100;
+
+    if (hundreds > 0) result += ones[hundreds] + ' Hundred ';
+
+    if (remainder >= 20) {
+      result += tens[Math.floor(remainder / 10)];
+      if (remainder % 10 > 0) result += ' ' + ones[remainder % 10];
+    } else if (remainder >= 10) {
+      result += teens[remainder - 10];
+    } else if (remainder > 0) {
+      result += ones[remainder];
+    }
+
+    return result.trim();
+  };
+
+  let intNum = Math.floor(num);
+  let result = '';
+  let scaleIndex = 0;
+
+  while (intNum > 0 && scaleIndex < scales.length) {
+    const chunk = intNum % 1000;
+    if (chunk !== 0) {
+      const chunkWords = convertBelow1000(chunk);
+      if (scaleIndex > 0) {
+        result = chunkWords + ' ' + scales[scaleIndex] + ' ' + result;
+      } else {
+        result = chunkWords + ' ' + result;
+      }
+    }
+    intNum = Math.floor(intNum / 1000);
+    scaleIndex++;
+  }
+
+  return result.trim() + ' Only';
 }
 
 function formatDateTime(date) {
@@ -129,23 +177,24 @@ function generateDonationReceiptPdf(donation) {
       const pageHeight = doc.page.height;
 
       // Define paths for assets
-      const logoPath = path.join(__dirname, '..', '..', 'assets', 'images', 'logo-2.png');
+      const logoPath = path.join(__dirname, '..', '..', 'assets', 'images', 'lamp.png');
       const contentWidth = pageWidth - 80; // 40 margin on each side
 
       // ==== WATERMARK (Faded background logo) ====
       if (fs.existsSync(logoPath)) {
-        const watermarkSize = 300;
+        const watermarkWidth = 250;
+        const watermarkHeight = 350;
         doc.opacity(0.08)
-           .image(logoPath, (pageWidth - watermarkSize) / 2, (pageHeight - watermarkSize) / 2, {
-             width: watermarkSize,
-             height: watermarkSize,
+           .image(logoPath, (pageWidth - watermarkWidth) / 2, (pageHeight - watermarkHeight) / 2, {
+             width: watermarkWidth,
+             height: watermarkHeight,
            });
         doc.opacity(1); // Reset opacity
       }
 
       // ==== HEADER: Logo and Organization Details (Inline) ====
       const headerY = 20;
-      const logoWidth = 50;
+      const logoWidth = 35;
       const logoHeight = 50;
 
       // Try to embed logo on the left
@@ -192,7 +241,7 @@ function generateDonationReceiptPdf(donation) {
       doc.fontSize(16)
         .font('Helvetica-Bold')
         .fillColor(COLORS.saffron)
-        .text('DONATION ACKNOWLEDGMENT SLIP', 20, doc.y, { width: pageWidth - 40, align: 'center' });
+        .text('DONATION ACKNOWLEDGEMENT SLIP', 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
       doc.moveDown(0.6);
 
@@ -265,16 +314,20 @@ function generateDonationReceiptPdf(donation) {
       addDetailRow(doc, 'Payment Gateway:', data.paymentGateway);
       addDetailRow(doc, 'Transaction ID:', data.transactionId);
       addDetailRow(doc, 'Order ID:', data.orderId);
-      addDetailRow(doc, 'Amount Received:', data.amount);
+      
+      const amountNumeric = Number(donation.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const amountInWords = convertNumberToWords(Math.floor(donation.amount || 0));
+      addDetailRow(doc, 'Amount Received:', `INR ${amountNumeric} (Indian Rupees ${amountInWords})`);
+      
       addDetailRow(doc, 'Purpose:', data.purpose);
 
       // Position footer near the bottom of the page
-      const footerStartY = pageHeight - 125; // Leave room for footer content
+      const footerStartY = pageHeight - 100; // Leave room for footer content
       if (doc.y < footerStartY) {
         doc.y = footerStartY;
       }
 
-      doc.moveDown(0.2);
+      doc.moveDown(0.1);
 
       // ==== DARK DIVIDER LINE ====
       doc.strokeColor(COLORS.saffron)
@@ -283,26 +336,18 @@ function generateDonationReceiptPdf(donation) {
         .lineTo(pageWidth - 20, doc.y)
         .stroke();
 
-      doc.moveDown(0.3);
+      doc.moveDown(0.2);
 
       // ==== 80G NOTICE SECTION ====
       doc.fontSize(9)
-        .font('Helvetica-Bold')
-        .fillColor(COLORS.saffron)
-        .text('80G DONATION RECEIPT', 20, doc.y, {
-          width: pageWidth - 40,
-          align: 'center'
-        });
-
-      doc.font('Helvetica')
-        .fontSize(8)
+        .font('Helvetica')
         .fillColor(COLORS.darkGray)
-        .text('80G Donation receipt will be sent from our Vasai office', 20, doc.y, {
+        .text('If your donation is eligible for 80G exemption, the 80G exemption receipt will be sent to you from our Vasai Office via WhatsApp/ Email', 20, doc.y, {
           width: pageWidth - 40,
           align: 'center'
         });
 
-      doc.moveDown(0.3);
+      doc.moveDown(0.2);
 
       // ==== THANK YOU SECTION ====
       doc.fontSize(10)
@@ -310,7 +355,7 @@ function generateDonationReceiptPdf(donation) {
         .fillColor(COLORS.darkGray)
         .text('Thank you for your generous donation!', 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
-      doc.moveDown(0.2);
+      doc.moveDown(0.1);
 
       // ==== MISSION MOTTO SECTION ====
       doc.fontSize(9)
@@ -318,19 +363,15 @@ function generateDonationReceiptPdf(donation) {
         .fillColor(COLORS.darkGray)
         .text('Your contribution Supports our mission of', 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
-      doc.text('"Maximum Happiness To Maximum People', 20, doc.y, { width: pageWidth - 40, align: 'center' });
+      doc.text('"Maximum Happiness To Maximum People For Maximum Time"', 20, doc.y, { width: pageWidth - 40, align: 'center' });
 
-      doc.text('For Maximum Time"', 20, doc.y, { width: pageWidth - 40, align: 'center' });
-
-      doc.moveDown(0.3);
+      doc.moveDown(0.15);
 
       // ==== ORGANIZATION NAME ====
       doc.fontSize(10)
         .font('Helvetica-Bold')
         .fillColor(COLORS.darkGray)
         .text(data.organizationName, 20, doc.y, { width: pageWidth - 40, align: 'center' });
-
-      doc.moveDown(0.1);
 
       // ==== ORGANIZATION WEBSITE ====
       doc.fontSize(9)
