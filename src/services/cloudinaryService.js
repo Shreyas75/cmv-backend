@@ -32,6 +32,38 @@ class CloudinaryService {
 
     return await Promise.all(uploadPromises);
   }
+
+  async uploadFile(fileBase64, options = {}) {
+    const resourceType = options.resourceType || 'auto';
+    const filename = options.filename;
+
+    try {
+      const payload = {
+        file: fileBase64,
+        upload_preset: this.uploadPreset,
+      };
+
+      if (filename) {
+        payload.public_id = filename.replace(/\.[^/.]+$/, '').replace(/[^\w\-]+/g, '_');
+      }
+
+      const response = await axios.post(
+        `https://api.cloudinary.com/v1_1/${this.cloudName}/${resourceType}/upload`,
+        payload
+      );
+
+      return {
+        url: response.data.secure_url,
+        publicId: response.data.public_id,
+        format: response.data.format,
+        bytes: response.data.bytes,
+        resourceType: response.data.resource_type,
+      };
+    } catch (error) {
+      const details = error.response?.data?.error?.message || error.message;
+      throw new Error(`Failed to upload file to Cloudinary: ${details}`);
+    }
+  }
 }
 
 module.exports = new CloudinaryService();

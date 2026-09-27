@@ -17,6 +17,32 @@ class UtilityController {
     }
   }
 
+  async uploadFile(req, res) {
+    try {
+      const { fileBase64, filename, fileType } = req.body;
+
+      if (!fileBase64) {
+        return res.status(400).json({ error: 'File data is required' });
+      }
+
+      const resourceType = fileType === 'audio' ? 'video' : fileType === 'pdf' ? 'raw' : 'auto';
+      const uploaded = await cloudinaryService.uploadFile(fileBase64, {
+        resourceType,
+        filename,
+      });
+
+      res.json({
+        url: uploaded.url,
+        publicId: uploaded.publicId,
+        format: uploaded.format,
+        bytes: uploaded.bytes,
+        name: filename || 'file',
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message || 'File upload failed' });
+    }
+  }
+
   async exportUserData(req, res) {
     try {
       const csv = await exportService.exportUserDataToCSV();

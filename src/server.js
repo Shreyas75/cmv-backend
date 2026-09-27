@@ -24,7 +24,7 @@ connectDB().catch(err => {
 // Middleware
 app.use(corsLogger); // Log CORS issues only when needed
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // Routes
 app.use('/', routes);
